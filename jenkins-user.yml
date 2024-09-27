@@ -1,0 +1,65 @@
+---
+- name: Configure Jenkins and create admin user
+  hosts: servers
+  become: yes
+
+  vars:
+    jenkins_admin_user: "admin"
+    jenkins_admin_password: "admin123"
+
+  tasks:
+    # Ensure Jenkins is started (if it's already installed)
+    - name: Start Jenkins service
+      systemd:
+        name: jenkins
+        state: started
+        enabled: yes
+
+    - name: Wait for Jenkins to start
+      wait_for:
+        port: 8080
+        delay: 10
+        timeout: 300
+
+    - name: Get initial admin password for Jenkins
+      command: cat /var/lib/jenkins/secrets/initialAdminPassword
+      register: jenkins_initial_password
+      ignore_errors: yes  # Ignore error in case the file doesn't exist (e.g., already configured)
+
+    - name: Show Jenkins initial admin password (if available)
+      debug:
+        var: jenkins_initial_password.stdout
+      when: jenkins_initial_password.stdout is defined
+
+    # Ensure the directory for groovy scripts exists
+    - name: Ensure init.groovy.d directory exists
+      file:
+        path: /var/lib/jenkins/init.groovy.d
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: '0755'
+
+    # Create the admin user via Groovy script
+    - name: Create Jenkins admin user via Groovy script
+      copy:
+        content: |
+          import jenkins.model.*
+          import hudson.security.*
+
+          def instance = Jenkins.getInstance()
+          def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+          hudsonRealm.createAccount("{{ jenkins_admin_user }}", "{{ jenkins_admin_password }}")
+          instance.setSecurityRealm(hudsonRealm)
+          instance.save()
+        dest: /var/lib/jenkins/init.groovy.d/basic-security.groovy
+        owner: jenkins
+        group: jenkins
+        mode: '0755'
+
+    # Restart Jenkins after configuration
+    - name: Restart Jenkins after configuration
+      systemd:
+        name: jenkins
+        state: restarted
+
