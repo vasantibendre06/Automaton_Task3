@@ -1,0 +1,27 @@
+{
+  "variables": {
+    "aws_region": "us-east-1",
+    "source_ami": "",  // Example Ubuntu AMI
+    "instance_type": "t2.micro"
+  },
+  "builders": [
+    {
+      "type": "amazon-ebs",
+      "region": "{{user `aws_region`}}",
+      "source_ami": "{{user `source_ami`}}",
+      "instance_type": "{{user `instance_type`}}",
+      "ssh_username": "ubuntu",
+      "ami_name": "packer-ami-with-docker-ansible-{{timestamp}}"
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "script": "./install-docker.sh"
+    },
+    {
+      "type": "shell",
+      "script": "./install-ansible.sh"
+    }
+  ]
+}
