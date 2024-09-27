@@ -1,0 +1,90 @@
+---
+- name: Configure SonarQube Scanner Path and set JAVA_HOME
+  hosts: servers
+  become: true  # Ensure necessary privileges
+  vars:
+    jenkins_host: "http://{{ ansible_host }}:8080"  # Jenkins host with protocol
+    jenkins_user: "admin"  # Jenkins user
+    jenkins_api_token: "11b6f27576288c0a04ac4a2b579a48766a"  # Jenkins API token
+    sonar_auth_token: "squ_7d4eb2f91b409e55a86d8932075e0c0019998af9"  # SonarQube token
+    sonar_name: "SonarQube"  # SonarQube server name
+    sonar_server_url: "http://{{ ansible_host }}:9000"  # SonarQube server URL
+
+  tasks:
+    - name: Set JAVA_HOME in /etc/environment
+      lineinfile:
+        path: /etc/environment
+        line: 'JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64'
+        state: present
+
+    - name: Get Jenkins Crumb
+      uri:
+        url: "{{ jenkins_host }}/crumbIssuer/api/json"
+        method: GET
+        user: "{{ jenkins_user }}"
+        password: "{{ jenkins_api_token }}"
+        force_basic_auth: yes
+        return_content: yes
+      register: jenkins_crumb
+
+    - name: Ensure pip3 is installed
+      package:
+        name: python3-pip
+        state: present
+
+    - name: Ensure python3-venv is installed
+      package:
+        name: python3-venv
+        state: present
+
+    - name: Create virtual environment for Python packages
+      command: python3 -m venv /opt/jenkins-venv
+      args:
+        creates: /opt/jenkins-venv/bin/activate
+
+    - name: Create requirements.txt for python-jenkins
+      copy:
+        content: "python-jenkins\n"
+        dest: /opt/jenkins-venv/requirements.txt
+
+    - name: Install python-jenkins in the virtual environment
+      pip:
+        requirements: /opt/jenkins-venv/requirements.txt
+        virtualenv: /opt/jenkins-venv
+        state: present
+
+    - name: Set Python interpreter to virtual environment
+      set_fact:
+        ansible_python_interpreter: /opt/jenkins-venv/bin/python
+
+    - name: Install SonarQube Scanner
+      shell: |
+        wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.6.2.2472-linux.zip
+        unzip sonar-scanner-cli-4.6.2.2472-linux.zip -d /opt/
+        mv /opt/sonar-scanner-4.6.2.2472-linux /opt/sonar-scanner
+        echo "export PATH=/opt/sonar-scanner/bin:\$PATH" >> /etc/environment
+      args:
+        creates: /opt/sonar-scanner/bin/sonar-scanner
+
+    - name: Configure Global Tool Configuration for SonarQube Scanner
+      jenkins_job:
+        name: "SonarQube Scanner"
+        config: |
+          <project>
+            <builders>
+              <hudson.plugins.sonar.SonarRunnerBuilder>
+                <properties>
+                  <sonarScannerHome>/opt/sonar-scanner</sonarScannerHome>
+                </properties>
+              </hudson.plugins.sonar.SonarRunnerBuilder>
+            </builders>
+          </project>
+        state: present
+        url: "{{ jenkins_host }}"
+        user: "{{ jenkins_user }}"
+        token: "{{ jenkins_api_token }}"
+      register: result
+
+    - debug:
+        var: result
+

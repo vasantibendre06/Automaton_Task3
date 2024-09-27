@@ -5,8 +5,8 @@
     jenkins_host: "{{ ansible_host }}"
     jenkins_user: "admin"
     job_name: "poc-task"
-    sonar_token_file_path: "/root/ansible-automation/sonarqube_token.txt"
-    api_token_file_path: "/root/ansible-automation/API_token.txt"
+    sonar_token: "squ_7d4eb2f91b409e55a86d8932075e0c0019998af9"  # Directly set your SonarQube token here
+    api_token: "11b6f27576288c0a04ac4a2b579a48766a"  # Directly set your Jenkins API token here
     job_config: |
       <?xml version='1.0' encoding='UTF-8'?>
       <flow-definition>
@@ -36,7 +36,7 @@
                     -Dsonar.projectKey=poc \
                     -Dsonar.sources=. \
                     -Dsonar.host.url=http://44.201.139.70:9000 \
-                    -Dsonar.login={{ sonar_token }}
+                    -Dsonar.login={{ sonar_token }}  # Using the directly set SonarQube token
                     """
                   }
                 }
@@ -96,23 +96,7 @@
       </flow-definition>
 
   tasks:
-    - name: Read API token from file
-      slurp:
-        src: "{{ api_token_file_path }}"
-      register: token_file
-
-    - name: Set the API token variable
-      set_fact:
-        api_token: "{{ token_file.content | b64decode }}"
-
-    - name: Read SonarQube Token from file
-      slurp:
-        src: "{{ sonar_token_file_path }}"
-      register: sonar_token_file
-
-    - name: Set the SonarQube token variable
-      set_fact:
-        sonar_token: "{{ sonar_token_file.content | b64decode }}"
+    # Removed the token reading from files since we are now using direct values
 
     - name: Create Jenkins Job
       uri:
@@ -144,3 +128,4 @@
     - name: Check job trigger response
       debug:
         var: trigger_job_result
+
